@@ -1,4 +1,3 @@
-source https://dotnet.myget.org/F/roslyn/api/v3/index.json
 source https://api.nuget.org/v3/index.json
 
 framework: monoandroid9.0
@@ -53,7 +52,6 @@ nuget Xamarin.Essentials 1.5.1 prerelease
 nuget Xamarin.Forms 4.6.0.726 prerelease
 
 group ns
-	source https://dotnet.myget.org/F/roslyn/api/v3/index.json
 	source https://api.nuget.org/v3/index.json
 
 	framework: netstandard20
