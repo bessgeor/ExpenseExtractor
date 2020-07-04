@@ -4,6 +4,11 @@ Microsoft Visual Studio Solution File, Format Version 12.00
 VisualStudioVersion = 15.0.26730.10
 MinimumVisualStudioVersion = 10.0.40219.1
 
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = ".paket", ".paket", "{C01F8EEB-7757-46A0-8158-5B36D4328928}"
+	ProjectSection(SolutionItems) = preProject
+		paket.dependencies = paket.dependencies
+	EndProjectSection
+EndProject
 Project("{6EC3EE1D-3C4E-46DD-8F32-0CC8E7565705}") = "ExpenseCounter.Mobile", "ExpenseCounter.Mobile\ExpenseCounter.Mobile.fsproj", "{CE6F6BFD-969F-4A53-A0BA-03CC22083A7C}"
 EndProject
 
