@@ -8,6 +8,7 @@
   <ItemGroup>
     <Compile Include="OfdCredentials.fs" />
     <Compile Include="App.fs" />
+    <EmbeddedResource Include="icon_settings.png" />
   </ItemGroup>
   <ItemGroup>
     <PackageReference Include="Xamarin.Forms" Version="4.6.0.726" />

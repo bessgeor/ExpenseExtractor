@@ -2,63 +2,104 @@
 namespace ExpenseCounter.Mobile
 
 open System.Diagnostics
+open System.Text.RegularExpressions
 open Fabulous
 open Fabulous.XamarinForms
 open Fabulous.XamarinForms.LiveUpdate
 open Xamarin.Forms
 
 module App = 
-    type Model = 
-      { Count : int
-        Step : int
-        TimerOn: bool }
+  type Model =
+    {
+      SettingsOpen: bool
+      Phone: string
+      Password: string
+    }
 
-    type Msg = 
-        | Increment 
-        | Decrement 
-        | Reset
-        | SetStep of int
-        | TimerToggled of bool
-        | TimedTick
+  type Msg =
+    | OpenSettings
+    | LoadedCredentialsFromStorage of OfdCredentials.OfdCredentials ValueOption
+    | PhoneChanged of string
+    | PasswordChanged of string
+    | SaveCredentials
+    | CredentialsSaved
 
-    let initModel = { Count = 0; Step = 1; TimerOn=false }
+  let initModel =
+    {
+      SettingsOpen = false
+      Phone = "+7"
+      Password = ""
+    }
 
-    let init () = initModel, Cmd.none
+  let private loadFromStorage =
+    async {
+      let! credentials = OfdCredentials.get()
+      return LoadedCredentialsFromStorage credentials
+    }
+    |> Cmd.ofAsyncMsg
 
-    let timerCmd =
-        async { do! Async.Sleep 200
-                return TimedTick }
-        |> Cmd.ofAsyncMsg
+  let init () = initModel, Cmd.none
 
-    let update msg model =
-        match msg with
-        | Increment -> { model with Count = model.Count + model.Step }, Cmd.none
-        | Decrement -> { model with Count = model.Count - model.Step }, Cmd.none
-        | Reset -> init ()
-        | SetStep n -> { model with Step = n }, Cmd.none
-        | TimerToggled on -> { model with TimerOn = on }, (if on then timerCmd else Cmd.none)
-        | TimedTick -> 
-            if model.TimerOn then 
-                { model with Count = model.Count + model.Step }, timerCmd
-            else 
-                model, Cmd.none
+  let private saveToStorage model =
+    async {
+      do! OfdCredentials.set { Phone = model.Phone; Password = model.Password }
+      return CredentialsSaved
+    }
+    |> Cmd.ofAsyncMsg
 
-    let view (model: Model) dispatch =
-        View.ContentPage(
-          content = View.StackLayout(padding = Thickness 20.0, verticalOptions = LayoutOptions.Center,
-            children = [ 
-                View.Label(text = sprintf "%d" model.Count, horizontalOptions = LayoutOptions.Center, width=200.0, horizontalTextAlignment=TextAlignment.Center)
-                View.Button(text = "Increment", command = (fun () -> dispatch Increment), horizontalOptions = LayoutOptions.Center)
-                View.Button(text = "Decrement", command = (fun () -> dispatch Decrement), horizontalOptions = LayoutOptions.Center)
-                View.Label(text = "Timer", horizontalOptions = LayoutOptions.Center)
-                View.Switch(isToggled = model.TimerOn, toggled = (fun on -> dispatch (TimerToggled on.Value)), horizontalOptions = LayoutOptions.Center)
-                View.Slider(minimumMaximum = (0.0, 10.0), value = double model.Step, valueChanged = (fun args -> dispatch (SetStep (int (args.NewValue + 0.5)))), horizontalOptions = LayoutOptions.FillAndExpand)
-                View.Label(text = sprintf "Step size: %d" model.Step, horizontalOptions = LayoutOptions.Center) 
-                View.Button(text = "Reset", horizontalOptions = LayoutOptions.Center, command = (fun () -> dispatch Reset), commandCanExecute = (model <> initModel))
-            ]))
+  let update msg model =
+    match msg with
+    | OpenSettings -> { model with SettingsOpen = true }, loadFromStorage
+    | LoadedCredentialsFromStorage cred ->
+      cred
+      |> ValueOption.map (fun x -> { model with Phone = x.Phone; Password = x.Password })
+      |> ValueOption.defaultValue model
+      , Cmd.none
+    | PhoneChanged phone -> { model with Phone = phone }, Cmd.none
+    | PasswordChanged pwd -> { model with Password = pwd }, Cmd.none
+    | SaveCredentials -> model, saveToStorage model
+    | CredentialsSaved -> { model with SettingsOpen = false; Phone = "+7"; Password = "" }, Cmd.none
+
+  let phoneValid = Regex(@"^\+7\d{3}\d{7}$")
+  let paswdValid = Regex(@"^\d{6}$")
+
+  let view model dispatch =
+    if model.SettingsOpen then
+      View.ContentPage(
+        content = View.StackLayout(padding = Thickness 20., verticalOptions = LayoutOptions.Center,
+          children = [
+            View.Label(text = "Settings", fontSize = FontSize.Named NamedSize.Title)
+            View.Label(text = "OFD-registered phone")
+            View.Editor(text = model.Phone, textChanged = (fun x -> dispatch (PhoneChanged x.NewTextValue)), keyboard = Keyboard.Telephone)
+            if not (phoneValid.IsMatch model.Phone) then
+              View.Label(text="Phone format: +7XXXYYYZZZZ", textColor = Color.Accent)
+            View.Label(text = "OFD password")
+            View.Editor(text = model.Password, textChanged = (fun x -> dispatch (PasswordChanged x.NewTextValue)), keyboard = Keyboard.Numeric)
+            if not (paswdValid.IsMatch model.Password) then
+              View.Label(text="Password consists of 6 digits", textColor = Color.Accent)
+            View.Button(text = "Save&Exit", command = fun () -> dispatch SaveCredentials)
+          ]
+        )
+      )
+    else
+      View.ContentPage(
+        content = View.StackLayout(padding = Thickness 20., //verticalOptions = LayoutOptions.Center,
+          children = [
+            View.ImageButton(
+              source = ImageSrc (ImageSource.FromResource("ExpenseCounter.Mobile.icon_settings.png", typeof<Msg>.Assembly)),
+              command = (fun () -> dispatch OpenSettings),
+              width = 64.0,
+              height = 64.0,
+              aspect = Aspect.AspectFit,
+              horizontalOptions = LayoutOptions.End,
+              backgroundColor = Color.Transparent
+            )
+          ]
+        )
+      )
 
     // Note, this declaration is needed if you enable LiveUpdate
-    let program = XamarinFormsProgram.mkProgram init update view
+  let program = XamarinFormsProgram.mkProgram init update view
 
 type App () as app = 
     inherit Application ()
@@ -74,7 +115,7 @@ type App () as app =
     // Uncomment this line to enable live update in debug mode. 
     // See https://fsprojects.github.io/Fabulous/Fabulous.XamarinForms/tools.html#live-update for further  instructions.
     //
-    //do runner.EnableLiveUpdate()
+    do runner.EnableLiveUpdate()
 #endif    
 
     // Uncomment this code to save the application state to app.Properties using Newtonsoft.Json
