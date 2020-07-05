@@ -9,10 +9,12 @@
   <ItemGroup>
     <Compile Include="QueryStringValueExtractor.fs" />
     <Compile Include="OfdCredentials.fs" />
+    <Compile Include="Receipts.fs" />
     <Compile Include="App.fs" />
     <EmbeddedResource Include="icon_settings.png" />
   </ItemGroup>
   <ItemGroup>
+    <PackageReference Include="LiteDb.FSharp" Version="2.15.1" />
     <PackageReference Include="Xamarin.Forms" Version="4.6.0.726" />
     <PackageReference Include="Xamarin.Essentials" Version="1.5.1" />
     <PackageReference Include="Fabulous.XamarinForms" Version="0.54.2" />

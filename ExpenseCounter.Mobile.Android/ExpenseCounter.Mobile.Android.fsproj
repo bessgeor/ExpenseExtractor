@@ -131,6 +131,12 @@
     <None Include="packages.config" />
   </ItemGroup>
   <ItemGroup>
+    <Reference Include="LiteDB">
+      <HintPath>..\packages\LiteDB.4.1.4\lib\netstandard2.0\LiteDB.dll</HintPath>
+    </Reference>
+    <Reference Include="LiteDB.FSharp">
+      <HintPath>..\packages\LiteDB.FSharp.2.15.1\lib\netstandard2.0\LiteDB.FSharp.dll</HintPath>
+    </Reference>
     <Reference Include="Microsoft.CSharp" />
     <Reference Include="Mono.Android" />
     <Reference Include="System" />
@@ -139,6 +145,12 @@
     <Reference Include="System.Numerics.Vectors" />
     <Reference Include="System.Xml.Linq" />
     <Reference Include="System.Xml" />
+    <Reference Include="TypeShape">
+      <HintPath>..\packages\TypeShape.7.1.0\lib\netstandard2.0\TypeShape.dll</HintPath>
+    </Reference>
+    <Reference Include="TypeShape.CSharp">
+      <HintPath>..\packages\TypeShape.7.1.0\lib\netstandard2.0\TypeShape.CSharp.dll</HintPath>
+    </Reference>
     <Reference Include="Xamarin.Android.FSharp.ResourceProvider.Runtime">
       <HintPath>..\packages\Xamarin.Android.FSharp.ResourceProvider.1.0.0.28\lib\monoandroid81\Xamarin.Android.FSharp.ResourceProvider.Runtime.dll</HintPath>
     </Reference>
