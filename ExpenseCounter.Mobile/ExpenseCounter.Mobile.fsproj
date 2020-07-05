@@ -1,11 +1,12 @@
 <Project Sdk="Microsoft.NET.Sdk">
 
   <PropertyGroup>
-    <TargetFramework>netstandard2.0</TargetFramework>
+    <TargetFramework>netstandard2.1</TargetFramework>
     <EnableDefaultEmbeddedResourceItems>false</EnableDefaultEmbeddedResourceItems>
   </PropertyGroup>
 
   <ItemGroup>
+    <Compile Include="QueryStringValueExtractor.fs" />
     <Compile Include="OfdCredentials.fs" />
     <Compile Include="App.fs" />
     <EmbeddedResource Include="icon_settings.png" />
