@@ -7,6 +7,8 @@ open Fabulous
 open Fabulous.XamarinForms
 open Fabulous.XamarinForms.LiveUpdate
 open Xamarin.Forms
+open System
+open Receipts
 
 module App = 
   type Model =
@@ -14,6 +16,7 @@ module App =
       SettingsOpen: bool
       Phone: string
       Password: string
+      CurrentReceipts: ReceiptDTO array
     }
 
   type Msg =
@@ -24,23 +27,30 @@ module App =
     | SaveCredentials
     | CredentialsSaved
 
+    | ReceiptsUpdated of ReceiptDTO array
+
   let initModel =
     {
       SettingsOpen = false
       Phone = "+7"
       Password = ""
+      CurrentReceipts = [||]
     }
 
-  let private loadFromStorage =
+  let updateReceipts () =
+    Receipts.getLatestReceipts 10
+    |> ReceiptsUpdated
+
+  let init () = initModel, Cmd.ofMsg (updateReceipts())
+
+  let private loadCredentialsFromStorage =
     async {
       let! credentials = OfdCredentials.get()
       return LoadedCredentialsFromStorage credentials
     }
     |> Cmd.ofAsyncMsg
 
-  let init () = initModel, Cmd.none
-
-  let private saveToStorage model =
+  let private saveCredentialsToStorage model =
     async {
       do! OfdCredentials.set { Phone = model.Phone; Password = model.Password }
       return CredentialsSaved
@@ -49,7 +59,7 @@ module App =
 
   let update msg model =
     match msg with
-    | OpenSettings -> { model with SettingsOpen = true }, loadFromStorage
+    | OpenSettings -> { model with SettingsOpen = true }, loadCredentialsFromStorage
     | LoadedCredentialsFromStorage cred ->
       cred
       |> ValueOption.map (fun x -> { model with Phone = x.Phone; Password = x.Password })
@@ -57,11 +67,31 @@ module App =
       , Cmd.none
     | PhoneChanged phone -> { model with Phone = phone }, Cmd.none
     | PasswordChanged pwd -> { model with Password = pwd }, Cmd.none
-    | SaveCredentials -> model, saveToStorage model
-    | CredentialsSaved -> { model with SettingsOpen = false; Phone = "+7"; Password = "" }, Cmd.none
+    | SaveCredentials -> model, saveCredentialsToStorage model
+    | CredentialsSaved -> { model with SettingsOpen = false; Phone = initModel.Phone; Password = initModel.Password }, Cmd.none
+
+    | ReceiptsUpdated receipts -> { model with CurrentReceipts = receipts }, Cmd.none
 
   let phoneValid = Regex(@"^\+7\d{3}\d{7}$")
   let paswdValid = Regex(@"^\d{6}$")
+
+  let receiptDisplay (receipt: ReceiptDTO) =
+    let localTime = DateTime.SpecifyKind(receipt.LastAction, DateTimeKind.Utc).ToLocalTime()
+    let state =
+      match receipt.Stage with
+      | Scan -> "scanned receipt"
+      | Parse -> "parsed receipt"
+      | ParsingError -> "receipt parse failed"
+      | Details -> "detailed receipt"
+      | DetailsFail -> "failed getting receipt details"
+      | Upload -> "synced up receipt"
+      | UploadFail -> "receipt syncronization failed"
+
+    View.Label(
+      text = sprintf "%A %s" localTime state,
+      padding = Thickness 5.,
+      textColor = if Option.isSome receipt.Error then Color.Accent else Color.Default
+     )
 
   let view model dispatch =
     if model.SettingsOpen then
@@ -71,12 +101,12 @@ module App =
             View.Label(text = "Settings", fontSize = FontSize.Named NamedSize.Title)
             View.Label(text = "OFD-registered phone")
             View.Editor(text = model.Phone, textChanged = (fun x -> dispatch (PhoneChanged x.NewTextValue)), keyboard = Keyboard.Telephone)
-            if not (phoneValid.IsMatch model.Phone) then
-              View.Label(text="Phone format: +7XXXYYYZZZZ", textColor = Color.Accent)
+            //if not (phoneValid.IsMatch model.Phone) then
+            //  View.Label(text="Phone format: +7XXXYYYZZZZ", textColor = Color.Accent)
             View.Label(text = "OFD password")
             View.Editor(text = model.Password, textChanged = (fun x -> dispatch (PasswordChanged x.NewTextValue)), keyboard = Keyboard.Numeric)
-            if not (paswdValid.IsMatch model.Password) then
-              View.Label(text="Password consists of 6 digits", textColor = Color.Accent)
+            //if not (paswdValid.IsMatch model.Password) then
+            //  View.Label(text="Password consists of 6 digits", textColor = Color.Accent)
             View.Button(text = "Save&Exit", command = fun () -> dispatch SaveCredentials)
           ]
         )
@@ -88,11 +118,20 @@ module App =
             View.ImageButton(
               source = ImageSrc (ImageSource.FromResource("ExpenseCounter.Mobile.icon_settings.png", typeof<Msg>.Assembly)),
               command = (fun () -> dispatch OpenSettings),
-              width = 64.0,
-              height = 64.0,
+              width = 32.0,
+              height = 32.0,
               aspect = Aspect.AspectFit,
               horizontalOptions = LayoutOptions.End,
               backgroundColor = Color.Transparent
+            )
+            View.Label(text = "Receipts", fontSize = FontSize.Named NamedSize.Title)
+            View.ScrollView(padding = Thickness(0., 20., 0., 0.), verticalOptions = LayoutOptions.Fill,
+              content = View.StackLayout(
+                children = [
+                  for receipt in model.CurrentReceipts ->
+                    receiptDisplay receipt
+                ]
+              )
             )
           ]
         )
@@ -104,8 +143,13 @@ module App =
 type App () as app = 
     inherit Application ()
 
+    let subscribeOnDbChanges dispatch =
+      Receipts.onDbUpdate.Publish.Subscribe(fun () -> dispatch (App.updateReceipts()))
+      |> ignore
+
     let runner = 
         App.program
+        |> Program.withSubscription (fun _ -> Cmd.ofSub subscribeOnDbChanges)
 #if DEBUG
         |> Program.withConsoleTrace
 #endif
