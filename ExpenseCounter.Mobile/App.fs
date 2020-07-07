@@ -9,6 +9,7 @@ open Fabulous.XamarinForms.LiveUpdate
 open Xamarin.Forms
 open System
 open Receipts
+open System.Threading
 
 module App = 
   type Model =
@@ -140,8 +141,10 @@ module App =
     // Note, this declaration is needed if you enable LiveUpdate
   let program = XamarinFormsProgram.mkProgram init update view
 
-type App () as app = 
+type App (backgroundRunner: (CancellationToken -> unit) -> unit) as app = 
     inherit Application ()
+
+    do backgroundRunner (fun ct -> Async.RunSynchronously(ReceiptsPipeline.run(), cancellationToken = ct))
 
     let subscribeOnDbChanges dispatch =
       Receipts.onDbUpdate.Publish.Subscribe(fun () -> dispatch (App.updateReceipts()))

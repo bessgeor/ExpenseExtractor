@@ -97,6 +97,7 @@ open LiteDB.FSharp.Extensions
     let collection = getCollection db
     collection
       .findMany <@ fun x -> x.Stage = step @>
+      |> Seq.toArray
 
   let getLatestReceipts (limit: int) =
     use db = accessDb()
