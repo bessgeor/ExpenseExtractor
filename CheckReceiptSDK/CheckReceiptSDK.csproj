@@ -1,0 +1,33 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <!-- deriviate work based on https://github.com/DmitriyBobrovskiy/CheckReceiptSDK. Changes made: change TFM to netstandard. Removed cyrillic characters from description. Update Newtonsoft.JSON -->
+  <PropertyGroup>
+    <TargetFramework>netstandard2.0</TargetFramework>
+    <Authors>Dmitriy Bobrovskiy</Authors>
+    <Description>Library for getting receipts' information from Russian Federal Tax Service.</Description>
+    <RepositoryUrl>https://github.com/DmitriyBobrovskiy/CheckReceiptSDK</RepositoryUrl>
+    <PackageRequireLicenseAcceptance>false</PackageRequireLicenseAcceptance>
+    <NeutralLanguage>ru-RU</NeutralLanguage>
+    <Version>1.0.2</Version>
+    <PackageTags>CheckReceipt, FNS, FederalTaxService</PackageTags>
+    <PackageProjectUrl>https://github.com/DmitriyBobrovskiy/CheckReceiptSDK</PackageProjectUrl>
+    <PackageLicenseExpression></PackageLicenseExpression>
+    <GeneratePackageOnBuild>false</GeneratePackageOnBuild>
+    <PackageLicenseFile>LICENSE</PackageLicenseFile>
+  </PropertyGroup>
+
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|AnyCPU'">
+    <DocumentationFile>bin\Release\netstandard2.0\CheckReceiptSDK.xml</DocumentationFile>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Newtonsoft.Json" Version="12.0.3" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <None Include="..\LICENSE">
+      <Pack>True</Pack>
+      <PackagePath></PackagePath>
+    </None>
+  </ItemGroup>
+
+</Project>
