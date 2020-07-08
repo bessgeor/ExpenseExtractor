@@ -27,9 +27,17 @@
       let parsed = tryParse receipt.Receipt
       updateReceipt receipt.Id parsed
 
+  let handleDetailable detailable =
+    async {
+      for receipt in detailable do
+        let! detailed = tryDetail receipt.Receipt
+        updateReceipt receipt.Id detailed
+    }
+
   let run () =
     async {
       while true do
         do getReceiptsOnStep Scan |> handleParsable
+        do! getReceiptsOnStep Parse |> handleDetailable
         do! Async.Sleep 100
     }
