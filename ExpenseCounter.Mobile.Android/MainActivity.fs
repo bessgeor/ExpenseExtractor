@@ -33,7 +33,7 @@ type MainActivity() =
 
         let background = Thread(ParameterizedThreadStart(fun bg -> (bg :?> (CancellationToken -> unit))((ValueOption.get this._bgCancellation).Token)))
         
-        let appcore  = new ExpenseCounter.Mobile.App(fun bg -> background.Start(box bg))
+        let appcore  = new ExpenseCounter.Mobile.App((fun bg -> background.Start (box bg)), box this)
         this.LoadApplication (appcore)
 
     override _.OnActivityResult (requestCode, resultCode, data) =

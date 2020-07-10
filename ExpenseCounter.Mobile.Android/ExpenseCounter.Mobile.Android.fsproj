@@ -144,17 +144,33 @@
       <HintPath>..\packages\LiteDB.FSharp.2.15.1\lib\netstandard2.0\LiteDB.FSharp.dll</HintPath>
     </Reference>
     <Reference Include="Microsoft.CSharp" />
+    <Reference Include="Microsoft.Graph">
+      <HintPath>..\packages\Microsoft.Graph.3.8.0\lib\netstandard2.0\Microsoft.Graph.dll</HintPath>
+    </Reference>
+    <Reference Include="Microsoft.Graph.Auth">
+      <HintPath>..\packages\Microsoft.Graph.Auth.1.0.0-preview.5\lib\netstandard1.3\Microsoft.Graph.Auth.dll</HintPath>
+    </Reference>
+    <Reference Include="Microsoft.Graph.Core">
+      <HintPath>..\packages\Microsoft.Graph.Core.1.20.1\lib\monoandroid70\Microsoft.Graph.Core.dll</HintPath>
+    </Reference>
     <Reference Include="Microsoft.Identity.Client">
       <HintPath>..\packages\Microsoft.Identity.Client.4.16.0\lib\monoandroid90\Microsoft.Identity.Client.dll</HintPath>
     </Reference>
     <Reference Include="Mono.Android" />
     <Reference Include="System" />
     <Reference Include="System.Core" />
+    <Reference Include="System.Diagnostics.DiagnosticSource">
+      <HintPath>..\packages\System.Diagnostics.DiagnosticSource.4.6.0\lib\netstandard1.3\System.Diagnostics.DiagnosticSource.dll</HintPath>
+    </Reference>
     <Reference Include="System.IdentityModel" />
+    <Reference Include="System.IO.Compression" />
     <Reference Include="System.Net.Http" />
     <Reference Include="System.Numerics" />
     <Reference Include="System.Numerics.Vectors" />
     <Reference Include="System.Runtime.Serialization" />
+    <Reference Include="System.ValueTuple">
+      <Private>True</Private>
+    </Reference>
     <Reference Include="System.Xml.Linq" />
     <Reference Include="System.Xml" />
     <Reference Include="TypeShape">

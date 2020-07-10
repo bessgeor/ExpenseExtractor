@@ -17,16 +17,21 @@ module App =
       SettingsOpen: bool
       Phone: string
       Password: string
+      SharingLink: string
+      SettingsSaveError: string voption
+
       CurrentReceipts: ReceiptDTO array
     }
 
   type Msg =
     | OpenSettings
-    | LoadedCredentialsFromStorage of OfdCredentials.OfdCredentials ValueOption
+    | LoadedSettingsFromStorage of OfdCredentials.OfdCredentials voption * string voption
     | PhoneChanged of string
     | PasswordChanged of string
-    | SaveCredentials
-    | CredentialsSaved
+    | SharingLinkChanged of string
+    | SaveSettings
+    | SettingsSaveError of string
+    | SettingsSaved
 
     | ReceiptsUpdated of ReceiptDTO array
     | RequireMSALSignIn
@@ -37,6 +42,9 @@ module App =
       SettingsOpen = false
       Phone = "+7"
       Password = ""
+      SharingLink = ""
+      SettingsSaveError = ValueNone
+
       CurrentReceipts = [||]
     }
 
@@ -49,14 +57,28 @@ module App =
   let private loadCredentialsFromStorage =
     async {
       let! credentials = OfdCredentials.get()
-      return LoadedCredentialsFromStorage credentials
+      let! sharingLink = SharingLink.getUnencodedSharingLink()
+      return LoadedSettingsFromStorage (credentials, sharingLink)
     }
     |> Cmd.ofAsyncMsg
 
   let private saveCredentialsToStorage model =
     async {
       do! OfdCredentials.set { Phone = model.Phone; Password = model.Password }
-      return CredentialsSaved
+      let encodedLink = SharingLink.encodeSharingLink model.SharingLink
+      try
+        let! document = MSGraphAPI.requestSharedFile encodedLink
+        let (hasError, error) = document.AdditionalData.TryGetValue "error"
+        if hasError then
+          return SettingsSaveError (error.ToString())
+        else
+          if document.File.MimeType <> "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" then
+            return SettingsSaveError "File is not Excel xslx spreadsheet"
+          else
+            do! SharingLink.setUnencodedSharingLink model.SharingLink
+            return SettingsSaved
+      with
+      | :? Exception as e -> return SettingsSaveError e.Message
     }
     |> Cmd.ofAsyncMsg
 
@@ -70,15 +92,21 @@ module App =
   let update msg model =
     match msg with
     | OpenSettings -> { model with SettingsOpen = true }, loadCredentialsFromStorage
-    | LoadedCredentialsFromStorage cred ->
-      cred
-      |> ValueOption.map (fun x -> { model with Phone = x.Phone; Password = x.Password })
+    | LoadedSettingsFromStorage (cred, link) ->
+      let model =
+        cred
+        |> ValueOption.map (fun creds -> { model with Phone = creds.Phone; Password = creds.Password })
+        |> ValueOption.defaultValue model
+      link
+      |> ValueOption.map (fun link -> { model with SharingLink = link })
       |> ValueOption.defaultValue model
       , Cmd.none
     | PhoneChanged phone -> { model with Phone = phone }, Cmd.none
     | PasswordChanged pwd -> { model with Password = pwd }, Cmd.none
-    | SaveCredentials -> model, saveCredentialsToStorage model
-    | CredentialsSaved -> { model with SettingsOpen = false; Phone = initModel.Phone; Password = initModel.Password }, Cmd.none
+    | SharingLinkChanged link -> { model with SharingLink = link }, Cmd.none
+    | SaveSettings -> model, saveCredentialsToStorage model
+    | SettingsSaveError err -> { model with SettingsSaveError = ValueSome err }, Cmd.none
+    | SettingsSaved -> { model with SettingsOpen = false; Phone = initModel.Phone; Password = initModel.Password; SharingLink = initModel.SharingLink }, Cmd.none
 
     | ReceiptsUpdated receipts -> { model with CurrentReceipts = receipts }, Cmd.none
     | RequireMSALSignIn -> model, msalSignIn
@@ -113,15 +141,17 @@ module App =
             View.Label(text = "Settings", fontSize = FontSize.Named NamedSize.Title)
             View.Label(text = "OFD-registered phone")
             View.Editor(text = model.Phone, textChanged = (fun x -> dispatch (PhoneChanged x.NewTextValue)), keyboard = Keyboard.Telephone)
-            //if not (phoneValid.IsMatch model.Phone) then
-            //  View.Label(text="Phone format: +7XXXYYYZZZZ", textColor = Color.Accent)
+            if not (phoneValid.IsMatch model.Phone) then
+              View.Label(text = "Phone format: +7XXXYYYZZZZ", textColor = Color.Accent)
             View.Label(text = "OFD password")
             View.Editor(text = model.Password, textChanged = (fun x -> dispatch (PasswordChanged x.NewTextValue)), keyboard = Keyboard.Numeric)
-            //if not (paswdValid.IsMatch model.Password) then
-            //  View.Label(text="Password consists of 6 digits", textColor = Color.Accent)
-            View.Button(text = "Save&Exit", command = fun () -> dispatch SaveCredentials)
-
-            View.Button(text = "Sign Into MS Account to save scanned data", command = (fun x -> dispatch RequireMSALSignIn), verticalOptions = LayoutOptions.End)
+            if not (paswdValid.IsMatch model.Password) then
+              View.Label(text = "Password consists of 6 digits", textColor = Color.Accent)
+            View.Label(text = "Your MS Excel OneDrive sharing link")
+            View.Editor(text = model.SharingLink, textChanged = (fun x -> dispatch (SharingLinkChanged x.NewTextValue)), keyboard = Keyboard.Url)
+            View.Button(text = "Save&Exit", command = fun () -> dispatch SaveSettings)
+            if ValueOption.isSome model.SettingsSaveError then
+              View.Label(text = (ValueOption.get model.SettingsSaveError), textColor = Color.Accent)
           ]
         )
       )
