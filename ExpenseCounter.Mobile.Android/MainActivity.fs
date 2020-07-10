@@ -12,6 +12,7 @@ open Android.Views
 open Android.Widget
 open Android.OS
 open Xamarin.Forms.Platform.Android
+open Microsoft.Identity.Client
 
 [<Activity (Label = "ExpenseCounter.Mobile.Android", Icon = "@drawable/icon", Theme = "@style/MainTheme", MainLauncher = true, ConfigurationChanges = (ConfigChanges.ScreenSize ||| ConfigChanges.Orientation))>]
 type MainActivity() =
@@ -35,6 +36,10 @@ type MainActivity() =
         let appcore  = new ExpenseCounter.Mobile.App(fun bg -> background.Start(box bg))
         this.LoadApplication (appcore)
 
+    override _.OnActivityResult (requestCode, resultCode, data) =
+      base.OnActivityResult(requestCode, resultCode, data)
+      AuthenticationContinuationHelper.SetAuthenticationContinuationEventArgs(requestCode, resultCode, data)
+
     override this.OnDestroy () =
       this._bgCancellation
       |> ValueOption.map (fun c ->
@@ -44,7 +49,7 @@ type MainActivity() =
       )
       |> ValueOption.defaultValue (ignore())
 
-    override this.OnRequestPermissionsResult(requestCode: int, permissions: string[], [<GeneratedEnum>] grantResults: Android.Content.PM.Permission[]) =
+    override _.OnRequestPermissionsResult(requestCode: int, permissions: string[], [<GeneratedEnum>] grantResults: Android.Content.PM.Permission[]) =
         Xamarin.Essentials.Platform.OnRequestPermissionsResult(requestCode, permissions, grantResults)
 
         base.OnRequestPermissionsResult(requestCode, permissions, grantResults)

@@ -29,6 +29,8 @@ module App =
     | CredentialsSaved
 
     | ReceiptsUpdated of ReceiptDTO array
+    | RequireMSALSignIn
+    | MSALSignedIn
 
   let initModel =
     {
@@ -58,6 +60,13 @@ module App =
     }
     |> Cmd.ofAsyncMsg
 
+  let private msalSignIn =
+    async {
+      do! MSALSignIn.signIn()
+      return MSALSignedIn
+    }
+    |> Cmd.ofAsyncMsg
+
   let update msg model =
     match msg with
     | OpenSettings -> { model with SettingsOpen = true }, loadCredentialsFromStorage
@@ -72,6 +81,8 @@ module App =
     | CredentialsSaved -> { model with SettingsOpen = false; Phone = initModel.Phone; Password = initModel.Password }, Cmd.none
 
     | ReceiptsUpdated receipts -> { model with CurrentReceipts = receipts }, Cmd.none
+    | RequireMSALSignIn -> model, msalSignIn
+    | MSALSignedIn -> model, Cmd.none
 
   let phoneValid = Regex(@"^\+7\d{3}\d{7}$")
   let paswdValid = Regex(@"^\d{6}$")
@@ -109,6 +120,8 @@ module App =
             //if not (paswdValid.IsMatch model.Password) then
             //  View.Label(text="Password consists of 6 digits", textColor = Color.Accent)
             View.Button(text = "Save&Exit", command = fun () -> dispatch SaveCredentials)
+
+            View.Button(text = "Sign Into MS Account to save scanned data", command = (fun x -> dispatch RequireMSALSignIn), verticalOptions = LayoutOptions.End)
           ]
         )
       )
@@ -141,8 +154,10 @@ module App =
     // Note, this declaration is needed if you enable LiveUpdate
   let program = XamarinFormsProgram.mkProgram init update view
 
-type App (backgroundRunner: (CancellationToken -> unit) -> unit) as app = 
+type App (backgroundRunner: (CancellationToken -> unit) -> unit, activityOrWindow: obj) as app = 
     inherit Application ()
+
+    do MSALSignIn.parentActivityOrWindow <- activityOrWindow
 
     do backgroundRunner (fun ct -> Async.RunSynchronously(ReceiptsPipeline.run(), cancellationToken = ct))
 
@@ -150,9 +165,14 @@ type App (backgroundRunner: (CancellationToken -> unit) -> unit) as app =
       Receipts.onDbUpdate.Publish.Subscribe(fun () -> dispatch (App.updateReceipts()))
       |> ignore
 
+    let subscribeOnAuthRequirance dispatch =
+      MSALAuthEvents.onAuthRequired.Publish.Subscribe(fun () -> dispatch App.RequireMSALSignIn)
+      |> ignore
+
     let runner = 
         App.program
         |> Program.withSubscription (fun _ -> Cmd.ofSub subscribeOnDbChanges)
+        |> Program.withSubscription (fun _ -> Cmd.ofSub subscribeOnAuthRequirance)
 #if DEBUG
         |> Program.withConsoleTrace
 #endif
