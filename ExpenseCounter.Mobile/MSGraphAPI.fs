@@ -52,12 +52,22 @@
 
   let client = GraphServiceClient (authProvider, (new HttpProvider()))
 
+  let getError (e: #Entity) =
+    let (hasError, error) = e.AdditionalData.TryGetValue "error"
+    if hasError then
+      ValueSome error
+    else ValueNone
+
+  let throwOnError (e: #Entity) =
+    let error = getError e
+    match error with
+    | ValueSome err -> raise (Exception (err.ToString()))
+    | ValueNone -> ignore()
+
   let requestSharedFile encodedSharingLink =
     async {
       let! driveItem = client.Shares.Item(encodedSharingLink).DriveItem.Request().GetAsync() |> Async.AwaitTask
-      let (hasError, error) = driveItem.AdditionalData.TryGetValue "error"
-      if hasError then
-        raise (Exception (error.ToString()))
+      do throwOnError driveItem
       return driveItem
     }
   

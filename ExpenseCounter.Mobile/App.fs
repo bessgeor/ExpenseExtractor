@@ -68,15 +68,12 @@ module App =
       let encodedLink = SharingLink.encodeSharingLink model.SharingLink
       try
         let! document = MSGraphAPI.requestSharedFile encodedLink
-        let (hasError, error) = document.AdditionalData.TryGetValue "error"
-        if hasError then
-          return SettingsSaveError (error.ToString())
+        do MSGraphAPI.throwOnError document
+        if document.File.MimeType <> "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" then
+          return SettingsSaveError "File is not Excel xslx spreadsheet"
         else
-          if document.File.MimeType <> "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" then
-            return SettingsSaveError "File is not Excel xslx spreadsheet"
-          else
-            do! SharingLink.setUnencodedSharingLink model.SharingLink
-            return SettingsSaved
+          do! SharingLink.setUnencodedSharingLink model.SharingLink
+          return SettingsSaved
       with
       | :? Exception as e -> return SettingsSaveError e.Message
     }
