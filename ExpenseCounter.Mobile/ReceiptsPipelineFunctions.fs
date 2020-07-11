@@ -4,6 +4,9 @@
   open System
   open QueryStringValueExtractor
   open CheckReceiptSDK
+  open Microsoft.Graph
+  open System.Threading.Tasks
+  open Newtonsoft.Json.Linq
 
   let private parse qs =
     {
@@ -95,4 +98,94 @@
         | DetailsGettingFailed (r, e) -> return handleAggrException exn e r DetailsGettingFailed
         | any -> return any
       | any -> return any
+    }
+
+
+  let private upload receipts =
+    async {
+      let! link = SharingLink.getEncodedSharingLink()
+      if (ValueOption.isNone link) then
+        raise (Exception("no excel file link specified"))
+      let! driveItem = MSGraphAPI.requestSharedFile (ValueOption.get link)
+      let groupedReceipts = receipts |> Array.groupBy (snd >> fun x -> x.IssuedAt.Year, x.IssuedAt.Month)
+
+      for (year, month), receipts in groupedReceipts do
+        let worksheetName = sprintf "%d.%s" year (month.ToString().PadLeft(2, '0'))
+        let worksheetApi = MSGraphAPI.client.Me.Drive.Items.Item(driveItem.Id).Workbook.Worksheets.Item(worksheetName)
+        let! worksheet = worksheetApi.Request().GetAsync() |> Async.AwaitTask
+        let error = MSGraphAPI.getError worksheet
+        let task =
+          match error with
+          | ValueSome err ->
+            match err with
+            | :? JObject as jo when jo.Value("code") = "ItemNotFound" ->
+              worksheetApi.Request().CreateAsync(WorkbookWorksheet(Name = worksheetName, Position = Nullable 0, Visibility = "Visible"))
+            | e -> Task.FromException<WorkbookWorksheet>(Exception(e.ToString()))
+          | ValueNone -> Task.FromResult worksheet
+        let! worksheet = task |> Async.AwaitTask
+        do MSGraphAPI.throwOnError worksheet
+
+        let! usedRange = worksheetApi.UsedRange(true).Request().GetAsync() |> Async.AwaitTask
+        do MSGraphAPI.throwOnError usedRange
+
+        let receiptData =
+          receipts
+          |> Seq.map snd
+          |> Seq.distinctBy (fun x -> x.Identifiers)
+          |> Seq.toArray
+
+        let rowCount = (usedRange.Text :?> JArray).Count
+        let startRowNum = if rowCount = 0 then 1 else rowCount + 1
+        let newRowsCount = receiptData |> Seq.sumBy (fun x -> x.Positions.Length)
+        let finishRowNum = startRowNum + (newRowsCount - 1)
+        let range = sprintf "A%d:Q%d" startRowNum finishRowNum
+
+        let positions = 
+          [|
+            for receipt in receiptData do
+              for position in receipt.Positions do
+                JArray([|
+                  receipt.IssuedAt.ToOADate() |> box
+                  null
+                  box position.Quantity
+                  box position.Price
+                  box position.Sum
+                  box position.Name
+                  null; null; null; null; null; null // separate out other data which may be useful for ML but not for user
+                  box receipt.SellerTIN
+                  box receipt.RetailAddress
+                  box receipt.StoreName
+                  box receipt.Identifiers.FiscalNumber
+                  box receipt.Identifiers.FiscalDocumentNumber
+                |])
+          |]
+        let newValues = JArray(positions)
+
+        let wbRange = WorkbookRange(Values = newValues)
+        let! response = worksheetApi.Range(range).Request().PatchAsync(wbRange) |> Async.AwaitTask
+        do MSGraphAPI.throwOnError response
+      return receipts |> Array.map (fun (dto, detailed) -> { dto with Receipt = Uploaded detailed })
+    }
+
+  let tryUpload receipts =
+    async {
+      let onlyUploadable =
+        receipts
+        |> Seq.map (
+          fun x -> x.Receipt |> function
+          | Detailed d -> ValueSome (x,d)
+          | UploadFailed (d, _) -> ValueSome (x,d)
+          | _ -> ValueNone
+        )
+        |> Seq.filter ValueOption.isSome
+        |> Seq.map ValueOption.get
+        |> Seq.toArray
+      try
+        let! uploaded = upload onlyUploadable
+        return uploaded
+      with
+      | :? Exception as e ->
+        return
+          onlyUploadable
+          |> Array.map (fun (dto, detailed) -> { dto with Receipt = UploadFailed (detailed, e) })
     }

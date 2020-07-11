@@ -34,10 +34,18 @@
         updateReceipt receipt.Id detailed
     }
 
+  let handleUploadable uploadable =
+    async {
+      let! uploaded = tryUpload uploadable
+      for uploaded in uploaded do
+        updateReceipt uploaded.Id uploaded.Receipt
+    }
+
   let run () =
     async {
       while true do
         do getReceiptsOnStep Scan |> handleParsable
         do! getReceiptsOnStep Parse |> handleDetailable
+        do! getReceiptsOnStep Details |> handleUploadable
         do! Async.Sleep 100
     }
