@@ -17,6 +17,11 @@
     <Compile Include="Receipts.fs" />
     <Compile Include="ReceiptsPipelineFunctions.fs" />
     <Compile Include="ReceiptsPipeline.fs" />
+    <Compile Include="Model.fs" />
+    <Compile Include="Update.fs" />
+    <Compile Include="MainView.fs" />
+    <Compile Include="SettingsView.fs" />
+    <Compile Include="ScannerView.fs" />
     <Compile Include="App.fs" />
     <EmbeddedResource Include="icon_settings.png" />
     <EmbeddedResource Include="icon_scan_qr.png" />
