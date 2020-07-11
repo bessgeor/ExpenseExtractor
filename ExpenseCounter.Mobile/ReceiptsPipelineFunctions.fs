@@ -7,6 +7,7 @@
   open Microsoft.Graph
   open System.Threading.Tasks
   open Newtonsoft.Json.Linq
+  open Xamarin.Essentials
 
   let private parse qs =
     {
@@ -66,25 +67,38 @@
         |> Seq.toArray
     }
 
+  let private noopIfNoInternet internetDependingHandler id receipt =
+    async {
+      if (Connectivity.NetworkAccess <> NetworkAccess.Internet) then
+        do! Async.Sleep(1000)
+        if (Connectivity.NetworkAccess <> NetworkAccess.Internet) then
+          return id receipt
+        else return! internetDependingHandler receipt
+      else return! internetDependingHandler receipt
+    }
+
+  let private requestFTSDetails (credentials: OfdCredentials.OfdCredentials) receipt =
+    FNS.LoginAsync (credentials.Phone, credentials.Password)
+    |> handleFNSResponse "login" receipt (fun _ ->
+      FNS.CheckAsync (receipt.FiscalNumber, receipt.FiscalDocumentNumber, receipt.FiscalSignature, receipt.Time, receipt.Sum)
+      |> handleFNSResponse "check receipt" receipt (fun response ->
+        if not response.ReceiptExists then
+          async.Return (DetailsGettingFailed (receipt, Exception("Federal Tax Service claims that this receipt does not exist")))
+        else
+          FNS.ReceiveAsync (receipt.FiscalNumber, receipt.FiscalDocumentNumber, receipt.FiscalSignature, credentials.Phone, credentials.Password)
+          |> handleFNSResponse "receive receipt details" receipt (fun resp -> parseDetailsFromResponse resp.Document.Receipt receipt |> Detailed |> async.Return)
+      )
+    )
+
   let private getDetails (receipt: ParsedReceipt) =
     async {
       let! credentialsOption = OfdCredentials.get()
       if ValueOption.isNone credentialsOption then
         return DetailsGettingFailed (receipt, Exception("No credentials stored"))
       else
-          let credentials = ValueOption.get credentialsOption
-          return!
-            FNS.LoginAsync (credentials.Phone, credentials.Password)
-            |> handleFNSResponse "login" receipt (fun _ ->
-              FNS.CheckAsync (receipt.FiscalNumber, receipt.FiscalDocumentNumber, receipt.FiscalSignature, receipt.Time, receipt.Sum)
-              |> handleFNSResponse "check receipt" receipt (fun response ->
-                if not response.ReceiptExists then
-                  async.Return (DetailsGettingFailed (receipt, Exception("Federal Tax Service claims that this receipt does not exist")))
-                else
-                  FNS.ReceiveAsync (receipt.FiscalNumber, receipt.FiscalDocumentNumber, receipt.FiscalSignature, credentials.Phone, credentials.Password)
-                  |> handleFNSResponse "receive receipt details" receipt (fun resp -> parseDetailsFromResponse resp.Document.Receipt receipt |> Detailed |> async.Return)
-              )
-            )
+        let credentials = ValueOption.get credentialsOption
+        let internetDependingHandler = requestFTSDetails credentials
+        return! noopIfNoInternet internetDependingHandler Parsed receipt
     }
 
   let tryDetail receipt =
@@ -100,13 +114,9 @@
       | any -> return any
     }
 
-
-  let private upload receipts =
+  let uploadInternetDepending encodedSharingLink receipts =
     async {
-      let! link = SharingLink.getEncodedSharingLink()
-      if (ValueOption.isNone link) then
-        raise (Exception("no excel file link specified"))
-      let! driveItem = MSGraphAPI.requestSharedFile (ValueOption.get link)
+      let! driveItem = MSGraphAPI.requestSharedFile encodedSharingLink
       let groupedReceipts = receipts |> Array.groupBy (snd >> fun x -> x.IssuedAt.Year, x.IssuedAt.Month)
 
       for (year, month), receipts in groupedReceipts do
@@ -165,6 +175,17 @@
         let! response = worksheetApi.Range(range).Request().PatchAsync(wbRange) |> Async.AwaitTask
         do MSGraphAPI.throwOnError response
       return receipts |> Array.map (fun (dto, detailed) -> { dto with Receipt = Uploaded detailed })
+    }
+
+
+  let private upload receipts =
+    async {
+      let! link = SharingLink.getEncodedSharingLink()
+      if (ValueOption.isNone link) then
+        raise (Exception("no excel file link specified"))
+      let encodedLink = ValueOption.get link
+      let internetDependngHandler = uploadInternetDepending encodedLink
+      return! noopIfNoInternet internetDependngHandler (fun _ -> Array.empty) receipts
     }
 
   let tryUpload receipts =
