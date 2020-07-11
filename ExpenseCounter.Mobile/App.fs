@@ -154,25 +154,36 @@ module App =
       )
     else
       View.ContentPage(
-        content = View.StackLayout(padding = Thickness 20., //verticalOptions = LayoutOptions.Center,
+        content = View.FlexLayout(padding = Thickness 20., direction = FlexDirection.Column,
           children = [
-            View.ImageButton(
-              source = ImageSrc (ImageSource.FromResource("ExpenseCounter.Mobile.icon_settings.png", typeof<Msg>.Assembly)),
-              command = (fun () -> dispatch OpenSettings),
-              width = 32.0,
-              height = 32.0,
-              aspect = Aspect.AspectFit,
-              horizontalOptions = LayoutOptions.End,
-              backgroundColor = Color.Transparent
+            View.FlexLayout(justifyContent = FlexJustify.SpaceBetween, height = 32.0,
+              children = [
+                View.Label(text = "Receipts", fontSize = FontSize.Named NamedSize.Title, horizontalOptions = LayoutOptions.Center)
+                View.ImageButton(
+                  source = ImageSrc (ImageSource.FromResource("ExpenseCounter.Mobile.icon_settings.png", typeof<Msg>.Assembly)),
+                  command = (fun () -> dispatch OpenSettings),
+                  width = 32.0,
+                  height = 32.0,
+                  aspect = Aspect.AspectFit,
+                  horizontalOptions = LayoutOptions.End,
+                  backgroundColor = Color.Transparent
+                )
+              ]
             )
-            View.Label(text = "Receipts", fontSize = FontSize.Named NamedSize.Title)
-            View.ScrollView(padding = Thickness(0., 20., 0., 0.), verticalOptions = LayoutOptions.Fill,
-              content = View.StackLayout(
-                children = [
-                  for receipt in model.CurrentReceipts ->
-                    receiptDisplay receipt
-                ]
-              )
+            grow 1. <| View.FlexLayout(direction = FlexDirection.Column,
+              children = [
+                View.ScrollView(padding = Thickness(0., 20., 0., 0.), verticalOptions = LayoutOptions.Fill,
+                  content = View.StackLayout(
+                    children = [
+                      if model.CurrentReceipts.Length = 0 then
+                        yield View.Label("No receipts scanned yed...")
+                      else
+                        for receipt in model.CurrentReceipts ->
+                          receiptDisplay receipt
+                    ]
+                  )
+                )
+              ]
             )
           ]
         )
