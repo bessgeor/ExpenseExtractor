@@ -55,7 +55,7 @@ type App (backgroundRunner: (CancellationToken -> unit) -> unit, activityOrWindo
     // Uncomment this line to enable live update in debug mode. 
     // See https://fsprojects.github.io/Fabulous/Fabulous.XamarinForms/tools.html#live-update for further  instructions.
     //
-    do runner.EnableLiveUpdate()
+    // do runner.EnableLiveUpdate()
 #endif    
 
     // Uncomment this code to save the application state to app.Properties using Newtonsoft.Json
