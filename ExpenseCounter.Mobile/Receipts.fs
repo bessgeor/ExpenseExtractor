@@ -80,7 +80,7 @@ open LiteDB.FSharp.Extensions
     collection.EnsureIndex((nameof x.Stage), false) |> ignore
     collection
 
-  let onDbUpdate = Event<unit>()
+  let onDbUpdate = Event<ReceiptDTO voption>()
 
   let addReceiptFromScan scanned =
     use db = accessDb()
@@ -90,7 +90,7 @@ open LiteDB.FSharp.Extensions
       collection.fullSearch <@ fun x -> x.Receipt @> (fun r -> r = receipt)
       |> Seq.tryHead
     if Option.isSome oldReceipt then
-      ignore()
+      Option.get oldReceipt
     else
       let dto =
         {
@@ -101,14 +101,26 @@ open LiteDB.FSharp.Extensions
           Receipt = receipt
         }
       collection.Insert dto |> ignore
-      onDbUpdate.Trigger()
+      onDbUpdate.Trigger(ValueSome dto)
+      dto
 
   let updateReceipt (value: ReceiptDTO) =
     use db = accessDb()
     let collection = getCollection db
     collection.Update value |> ignore
-    onDbUpdate.Trigger()
+    onDbUpdate.Trigger(ValueSome value)
     
+  let deleteReceipt (value: ReceiptDTO) =
+    use db = accessDb()
+    let collection = getCollection db
+    collection.delete <@ fun x -> x.Id = value.Id @> |> ignore
+    onDbUpdate.Trigger(ValueNone)
+
+  let getReceipt id =
+    use db = accessDb()
+    let collection = getCollection db
+    collection.findOne <@ fun x -> x.Id = id @>
+
   let getReceiptsOnStep step =
     use db = accessDb()
     let collection = getCollection db

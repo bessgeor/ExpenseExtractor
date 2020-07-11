@@ -21,6 +21,7 @@ module App =
           | Main -> MainView.view
           | Settings -> SettingsView.view
           | Scanner -> ScannerView.view
+          | ReceiptDetails -> ReceiptDetailsView.view
         ) model dispatch
     )
 
@@ -33,9 +34,15 @@ type App (backgroundRunner: (CancellationToken -> unit) -> unit, activityOrWindo
     do MSALSignIn.parentActivityOrWindow <- activityOrWindow
 
     do backgroundRunner (fun ct -> Async.RunSynchronously(ReceiptsPipeline.run(), cancellationToken = ct))
-
-    let subscribeOnDbChanges dispatch =
-      Receipts.onDbUpdate.Publish.Subscribe(fun () -> dispatch (Update.updateReceipts()))
+    
+    let subscribeListOnDbChanges dispatch =
+      Receipts.onDbUpdate.Publish.Subscribe(fun _ -> dispatch (Update.updateReceipts()))
+      |> ignore
+    
+    let subscribeDetailsOnDbChanges dispatch =
+      Receipts.onDbUpdate.Publish.Subscribe(fun changed -> 
+        if ValueOption.isSome changed then
+          dispatch (Update.ReceiptChanged (ValueOption.get changed)))
       |> ignore
 
     let subscribeOnAuthRequirance dispatch =
@@ -44,8 +51,9 @@ type App (backgroundRunner: (CancellationToken -> unit) -> unit, activityOrWindo
 
     let runner = 
         App.program
-        |> Program.withSubscription (fun _ -> Cmd.ofSub subscribeOnDbChanges)
+        |> Program.withSubscription (fun _ -> Cmd.ofSub subscribeListOnDbChanges)
         |> Program.withSubscription (fun _ -> Cmd.ofSub subscribeOnAuthRequirance)
+        |> Program.withSubscription (fun _ -> Cmd.ofSub subscribeDetailsOnDbChanges)
 #if DEBUG
         |> Program.withConsoleTrace
 #endif

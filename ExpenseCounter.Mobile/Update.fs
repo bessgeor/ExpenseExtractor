@@ -14,11 +14,13 @@
     | SettingsSaveError of string
     | SettingsSaved
 
+    | ReceiptChanged of ReceiptDTO
     | ReceiptsUpdated of ReceiptDTO array
     | RequireMSALSignIn
     | MSALSignedIn
 
     | Scanned of string
+    | Retry of ReceiptDTO
     
   let updateReceipts () =
     Receipts.getLatestReceipts 10
@@ -56,9 +58,18 @@
     }
     |> Cmd.ofAsyncMsg
 
+  let private retry receipt =
+    Async.Start (ReceiptsPipeline.retry receipt)
+    None
+
+
   let update msg model =
     match msg with
     | Navigate view -> { model with CurrentView = view }, loadCredentialsFromStorage
+    | ReceiptChanged changed ->
+      match model.CurrentView with
+      | ReceiptDetails receipt when receipt.Id = changed.Id -> model, Cmd.ofMsg (Navigate (ReceiptDetails changed))
+      | _ -> model, Cmd.none
     | LoadedSettingsFromStorage (cred, link) ->
       let model =
         cred
@@ -80,6 +91,7 @@
     | MSALSignedIn -> model, Cmd.none
     
     | Scanned text -> model, Cmd.ofAsyncMsg <| async {
-      do Async.Start <| async { do Receipts.addReceiptFromScan text }
-      return Navigate Main
-    }
+        let receipt = Receipts.addReceiptFromScan text
+        return Navigate (ReceiptDetails receipt)
+      }
+    | Retry receipt -> model, Cmd.ofMsgOption (retry receipt)

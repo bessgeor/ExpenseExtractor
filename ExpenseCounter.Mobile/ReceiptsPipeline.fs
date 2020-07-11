@@ -41,6 +41,16 @@
         updateReceipt uploaded.Id uploaded.Receipt
     }
 
+  let retry receipt =
+    async {
+      let currentState = getReceipt receipt.Id
+      match currentState.Stage with
+      | ParsingError -> do handleParsable (seq { currentState })
+      | DetailsFail -> do! handleDetailable (seq { currentState })
+      | UploadFail -> do! handleUploadable (seq { currentState })
+      | _ -> do ignore()
+    }
+
   let run () =
     async {
       while true do

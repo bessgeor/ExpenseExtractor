@@ -8,14 +8,20 @@
   open Receipts
   
   
-  let receiptDisplay (receipt: ReceiptDTO) =
+  let receiptDisplay (receipt: ReceiptDTO) dispatch =
     let localTime = DateTime.SpecifyKind(receipt.LastAction, DateTimeKind.Utc).ToLocalTime()
     let state = stageToString receipt
   
+    let navigateToDetails () = dispatch (Navigate (ReceiptDetails receipt))
+
     View.Label(
-      text = sprintf "%A %s" localTime state,
+      text = sprintf "#%d %A %s" receipt.Id localTime state,
       padding = Thickness 5.,
-      textColor = if Option.isSome receipt.Error then Color.Accent else Color.Default
+      textColor = (if Option.isSome receipt.Error then Color.Accent else Color.Default),
+      gestureRecognizers = [
+        View.ClickGestureRecognizer(command = navigateToDetails)
+        View.TapGestureRecognizer(command = navigateToDetails)
+      ]
     )
 
   let view model dispatch =
@@ -44,7 +50,7 @@
                     yield View.Label("No receipts scanned yed...")
                   else
                     for receipt in model.CurrentReceipts ->
-                      receiptDisplay receipt
+                      receiptDisplay receipt dispatch
                 ]
               )
             )

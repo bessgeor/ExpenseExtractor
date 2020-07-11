@@ -3,6 +3,7 @@
     | Main
     | Settings
     | Scanner
+    | ReceiptDetails of Receipts.ReceiptDTO
 
   type Model =
     {
