@@ -10,15 +10,7 @@
   
   let receiptDisplay (receipt: ReceiptDTO) =
     let localTime = DateTime.SpecifyKind(receipt.LastAction, DateTimeKind.Utc).ToLocalTime()
-    let state =
-      match receipt.Stage with
-      | Scan -> "scanned receipt"
-      | Parse -> "parsed receipt"
-      | ParsingError -> "receipt parse failed"
-      | Details -> "detailed receipt"
-      | DetailsFail -> "failed getting receipt details"
-      | Upload -> "synced up receipt"
-      | UploadFail -> "receipt syncronization failed"
+    let state = stageToString receipt
   
     View.Label(
       text = sprintf "%A %s" localTime state,

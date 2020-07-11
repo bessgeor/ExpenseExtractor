@@ -60,6 +60,17 @@ open LiteDB.FSharp.Extensions
       Receipt: Receipt
     }
 
+  let stageToString receipt =
+    match receipt.Stage with
+    | Scan -> "scanned receipt"
+    | Parse -> "parsed receipt"
+    | ParsingError -> "receipt parse failed"
+    | Details -> "detailed receipt"
+    | DetailsFail -> "failed getting receipt details"
+    | Upload -> "synced up receipt"
+    | UploadFail -> "receipt syncronization failed"
+
+
   let private mapper = FSharpBsonMapper()
   let private dbPath = System.IO.Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.Personal), "receipts.db")
   let private accessDb () = new LiteDatabase(dbPath, mapper)
