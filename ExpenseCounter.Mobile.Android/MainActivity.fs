@@ -26,6 +26,7 @@ type MainActivity() =
         base.OnCreate (bundle)
 
         Xamarin.Essentials.Platform.Init(this, bundle)
+        ZXing.Net.Mobile.Forms.Android.Platform.Init()
 
         Xamarin.Forms.Forms.Init (this, bundle)
         
@@ -33,7 +34,7 @@ type MainActivity() =
 
         let background = Thread(ParameterizedThreadStart(fun bg -> (bg :?> (CancellationToken -> unit))((ValueOption.get this._bgCancellation).Token)))
         
-        let appcore  = new ExpenseCounter.Mobile.App((fun bg -> background.Start (box bg)), box this)
+        let appcore = new ExpenseCounter.Mobile.App((fun bg -> background.Start (box bg)), box this)
         this.LoadApplication (appcore)
 
     override _.OnActivityResult (requestCode, resultCode, data) =
@@ -51,5 +52,5 @@ type MainActivity() =
 
     override _.OnRequestPermissionsResult(requestCode: int, permissions: string[], [<GeneratedEnum>] grantResults: Android.Content.PM.Permission[]) =
         Xamarin.Essentials.Platform.OnRequestPermissionsResult(requestCode, permissions, grantResults)
-
+        ZXing.Net.Mobile.Android.PermissionsHandler.OnRequestPermissionsResult (requestCode, permissions, grantResults)
         base.OnRequestPermissionsResult(requestCode, permissions, grantResults)

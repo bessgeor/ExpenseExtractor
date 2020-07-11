@@ -72,19 +72,25 @@ open LiteDB.FSharp.Extensions
   let onDbUpdate = Event<unit>()
 
   let addReceiptFromScan scanned =
-    let receipt = RawScanned scanned
-    let dto =
-      {
-        Id = 0
-        LastAction = DateTime.UtcNow
-        Stage = Scan
-        Error = None
-        Receipt = receipt
-      }
     use db = accessDb()
     let collection = getCollection db
-    collection.Insert dto |> ignore
-    onDbUpdate.Trigger()
+    let receipt = RawScanned scanned
+    let oldReceipt =
+      collection.fullSearch <@ fun x -> x.Receipt @> (fun r -> r = receipt)
+      |> Seq.tryHead
+    if Option.isSome oldReceipt then
+      ignore()
+    else
+      let dto =
+        {
+          Id = 0
+          LastAction = DateTime.UtcNow
+          Stage = Scan
+          Error = None
+          Receipt = receipt
+        }
+      collection.Insert dto |> ignore
+      onDbUpdate.Trigger()
 
   let updateReceipt (value: ReceiptDTO) =
     use db = accessDb()

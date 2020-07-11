@@ -7,6 +7,7 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <Compile Include="QrScannerView.fs" />
     <Compile Include="SharingLink.fs" />
     <Compile Include="MSALAuthEvents.fs" />
     <Compile Include="MSALSignIn.fs" />
@@ -18,6 +19,7 @@
     <Compile Include="ReceiptsPipeline.fs" />
     <Compile Include="App.fs" />
     <EmbeddedResource Include="icon_settings.png" />
+    <EmbeddedResource Include="icon_scan_qr.png" />
   </ItemGroup>
   <ItemGroup>
     <PackageReference Include="LiteDb.FSharp" Version="2.15.1" />
@@ -29,6 +31,8 @@
     <PackageReference Include="Fabulous.XamarinForms" Version="0.54.2" />
     <PackageReference Include="Fabulous.XamarinForms.LiveUpdate" Version="0.54.2" />
     <PackageReference Include="FSharp.Core" Version="4.7.1" />
+    <PackageReference Include="ZXing.Net.Mobile" Version="2.4.1" />
+    <PackageReference Include="ZXing.Net.Mobile.Forms" Version="2.4.1" />
     <PackageReference Update="FSharp.Core" Version="4.7.1" /> <!-- workaround for VSMac bug https://github.com/mono/monodevelop/pull/5137 --> 
     <PackageReference Include="Newtonsoft.Json" Version="12.0.3" />
   </ItemGroup>

@@ -163,8 +163,8 @@
                   box position.Name
                   null; null; null; null; null; null // separate out other data which may be useful for ML but not for user
                   box receipt.SellerTIN
-                  box receipt.RetailAddress
-                  box receipt.StoreName
+                  box <| Option.toObj receipt.RetailAddress
+                  box <| Option.toObj receipt.StoreName
                   box receipt.Identifiers.FiscalNumber
                   box receipt.Identifiers.FiscalDocumentNumber
                 |])

@@ -11,10 +11,15 @@ open System
 open Receipts
 open System.Threading
 
-module App = 
+module App =
+  type Views =
+    | Main
+    | Settings
+    | Scanner
+
   type Model =
     {
-      SettingsOpen: bool
+      CurrentView: Views
       Phone: string
       Password: string
       SharingLink: string
@@ -24,7 +29,7 @@ module App =
     }
 
   type Msg =
-    | OpenSettings
+    | Navigate of Views
     | LoadedSettingsFromStorage of OfdCredentials.OfdCredentials voption * string voption
     | PhoneChanged of string
     | PasswordChanged of string
@@ -37,9 +42,11 @@ module App =
     | RequireMSALSignIn
     | MSALSignedIn
 
+    | Scanned of string
+
   let initModel =
     {
-      SettingsOpen = false
+      CurrentView = Main
       Phone = "+7"
       Password = ""
       SharingLink = ""
@@ -88,7 +95,7 @@ module App =
 
   let update msg model =
     match msg with
-    | OpenSettings -> { model with SettingsOpen = true }, loadCredentialsFromStorage
+    | Navigate view -> { model with CurrentView = view }, loadCredentialsFromStorage
     | LoadedSettingsFromStorage (cred, link) ->
       let model =
         cred
@@ -103,11 +110,16 @@ module App =
     | SharingLinkChanged link -> { model with SharingLink = link }, Cmd.none
     | SaveSettings -> model, saveCredentialsToStorage model
     | SettingsSaveError err -> { model with SettingsSaveError = ValueSome err }, Cmd.none
-    | SettingsSaved -> { model with SettingsOpen = false; Phone = initModel.Phone; Password = initModel.Password; SharingLink = initModel.SharingLink }, Cmd.none
+    | SettingsSaved -> { model with Phone = initModel.Phone; Password = initModel.Password; SharingLink = initModel.SharingLink }, Cmd.ofMsg <| Navigate Main
 
     | ReceiptsUpdated receipts -> { model with CurrentReceipts = receipts }, Cmd.none
     | RequireMSALSignIn -> model, msalSignIn
     | MSALSignedIn -> model, Cmd.none
+    
+    | Scanned text -> model, Cmd.ofAsyncMsg <| async {
+      do Async.Start <| async { do Receipts.addReceiptFromScan text }
+      return Navigate Main
+    }
 
   let phoneValid = Regex(@"^\+7\d{3}\d{7}$")
   let paswdValid = Regex(@"^\d{6}$")
@@ -130,8 +142,11 @@ module App =
       textColor = if Option.isSome receipt.Error then Color.Accent else Color.Default
      )
 
+  let mutable lastScannedText = ""
+
   let view model dispatch =
-    if model.SettingsOpen then
+    match model.CurrentView with
+    | Settings ->
       View.ContentPage(
         content = View.StackLayout(padding = Thickness 20., verticalOptions = LayoutOptions.Center,
           children = [
@@ -152,7 +167,7 @@ module App =
           ]
         )
       )
-    else
+    | Main ->
       View.ContentPage(
         content = View.FlexLayout(padding = Thickness 20., direction = FlexDirection.Column,
           children = [
@@ -161,7 +176,7 @@ module App =
                 View.Label(text = "Receipts", fontSize = FontSize.Named NamedSize.Title, horizontalOptions = LayoutOptions.Center)
                 View.ImageButton(
                   source = ImageSrc (ImageSource.FromResource("ExpenseCounter.Mobile.icon_settings.png", typeof<Msg>.Assembly)),
-                  command = (fun () -> dispatch OpenSettings),
+                  command = (fun () -> dispatch (Navigate Settings)),
                   width = 32.0,
                   height = 32.0,
                   aspect = Aspect.AspectFit,
@@ -185,8 +200,30 @@ module App =
                 )
               ]
             )
+            alignSelf FlexAlignSelf.End <| View.ImageButton(
+              source = ImageSrc (ImageSource.FromResource("ExpenseCounter.Mobile.icon_scan_qr.png", typeof<Msg>.Assembly)),
+              command = (fun () -> dispatch (Navigate Scanner)),
+              width = 32.0,
+              height = 32.0,
+              aspect = Aspect.AspectFit,
+              horizontalOptions = LayoutOptions.End,
+              verticalOptions = LayoutOptions.End,
+              backgroundColor = Color.Transparent
+            )
           ]
         )
+      )
+    | Scanner ->
+      View.ContentPage(
+        content =
+          View.BarCodeScanner(
+            onScanResult =
+              fun res ->
+                let text = res.Text
+                if lastScannedText <> text then
+                  lastScannedText <- text
+                  dispatch (Scanned text)
+          )
       )
 
     // Note, this declaration is needed if you enable LiveUpdate
