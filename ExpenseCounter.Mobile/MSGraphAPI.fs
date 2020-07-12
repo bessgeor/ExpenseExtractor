@@ -8,49 +8,7 @@
 
   let authProvider = InteractiveAuthenticationProvider(MSALSignIn.PCA, MSALSignIn.scopes)
 
-  type private OnAuthFailureHandler () =
-    inherit DelegatingHandler()
-
-    member private this.DoSending requestMessage ct =
-      let responseAsync = base.SendAsync(requestMessage, ct)
-      async {
-        let! response = responseAsync |> Async.AwaitTask
-
-        if response.StatusCode = HttpStatusCode.Unauthorized then
-          MSALAuthEvents.onAuthRequired.Trigger()
-          do! Async.AwaitEvent MSALAuthEvents.onAuthSuccess.Publish
-          let! response = this.DoSending requestMessage ct
-          return response
-        else
-          return response
-      }
-
-    override this.SendAsync (requestMessage, ct) = 
-      this.DoSending requestMessage ct
-      |> fun a -> Async.StartAsTask (a, cancellationToken = ct)
-
-  let private authHandler = new OnAuthFailureHandler()
-
-  let handlers = GraphClientFactory.CreateDefaultHandlers authProvider
-  handlers.Add authHandler
-
-  let httpClient = GraphClientFactory.Create(handlers, nationalCloud = GraphClientFactory.Global_Cloud)
-
-  let tempClient = GraphServiceClient authProvider
-
-  type private HttpProvider () =
-    member val private timeout = tempClient.HttpProvider.OverallTimeout with get, set
-
-    interface IHttpProvider with
-      member this.OverallTimeout
-        with get () = this.timeout
-        and set v = this.timeout <- v
-      member _.Serializer = tempClient.HttpProvider.Serializer
-      member _.SendAsync message = httpClient.SendAsync message
-      member _.SendAsync (message, options, ct) = httpClient.SendAsync (message, options, ct)
-      member _.Dispose () = httpClient.Dispose()
-
-  let client = GraphServiceClient (authProvider, (new HttpProvider()))
+  let client = GraphServiceClient authProvider
 
   let getError (e: #Entity) =
     let (hasError, error) = e.AdditionalData.TryGetValue "error"
@@ -64,9 +22,32 @@
     | ValueSome err -> raise (Exception (err.ToString()))
     | ValueNone -> ignore()
 
+  type AsyncBuilder with
+    member inline private this.authAndRetry computation binder =
+      do Async.Start (async { MSALAuthEvents.onAuthRequired.Trigger() })
+      this.Bind(
+        this.Delay(fun () -> Async.AwaitEvent MSALAuthEvents.onAuthSuccess.Publish),
+        fun () -> this.Bind (computation, binder)
+      )
+
+    [<CustomOperation("authenticated", AllowIntoPattern = true, MaintainsVariableSpaceUsingBind = true)>]
+    member this.Authenticated<'T, 'U when 'U :> Entity> (computation: Async<'T>, [<ProjectionParameter>]binder:('T -> Async<'U>)) =
+      this.TryWith (
+        this.Bind (computation, binder),
+        (function 
+          | :? Microsoft.Graph.Auth.AuthenticationException -> this.authAndRetry computation binder
+          | :? AggregateException as aggr ->
+            match aggr.InnerException with
+            | :? Microsoft.Graph.ServiceException as serv when serv.Error.Code = "generalException" ->
+              this.authAndRetry computation binder
+            | exn -> raise exn
+          | exn -> raise exn
+        )
+      )
+
   let requestSharedFile encodedSharingLink =
     async {
-      let! driveItem = client.Shares.Item(encodedSharingLink).DriveItem.Request().GetAsync() |> Async.AwaitTask
+      authenticated (client.Shares.Item(encodedSharingLink).DriveItem.Request().GetAsync() |> Async.AwaitTask) into driveItem
       do throwOnError driveItem
       return driveItem
     }

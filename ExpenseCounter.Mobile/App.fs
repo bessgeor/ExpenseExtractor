@@ -6,6 +6,8 @@ open Fabulous.XamarinForms
 open Fabulous.XamarinForms.LiveUpdate
 open Xamarin.Forms
 open System.Threading
+open System
+open Microsoft.FSharpLu.Json
 
 module App =
   open Model
@@ -68,11 +70,11 @@ type App (backgroundRunner: (CancellationToken -> unit) -> unit, activityOrWindo
 
     // Uncomment this code to save the application state to app.Properties using Newtonsoft.Json
     // See https://fsprojects.github.io/Fabulous/Fabulous.XamarinForms/models.html#saving-application-state for further  instructions.
-#if APPSAVE
+
     let modelId = "model"
     override __.OnSleep() = 
 
-        let json = Newtonsoft.Json.JsonConvert.SerializeObject(runner.CurrentModel)
+        let json = Compact.serialize(runner.CurrentModel)
         Console.WriteLine("OnSleep: saving model into app.Properties, json = {0}", json)
 
         app.Properties.[modelId] <- json
@@ -84,7 +86,7 @@ type App (backgroundRunner: (CancellationToken -> unit) -> unit, activityOrWindo
             | true, (:? string as json) -> 
 
                 Console.WriteLine("OnResume: restoring model from app.Properties, json = {0}", json)
-                let model = Newtonsoft.Json.JsonConvert.DeserializeObject<App.Model>(json)
+                let model = BackwardCompatible.deserialize(json)
 
                 Console.WriteLine("OnResume: restoring model from app.Properties, model = {0}", (sprintf "%0A" model))
                 runner.SetCurrentModel (model, Cmd.none)
@@ -96,6 +98,4 @@ type App (backgroundRunner: (CancellationToken -> unit) -> unit, activityOrWindo
     override this.OnStart() = 
         Console.WriteLine "OnStart: using same logic as OnResume()"
         this.OnResume()
-#endif
-
 

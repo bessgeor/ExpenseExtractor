@@ -47,7 +47,7 @@
               content = View.StackLayout(
                 children = [
                   if model.CurrentReceipts.Length = 0 then
-                    yield View.Label("No receipts scanned yed...")
+                    yield View.Label("No receipts scanned yet...")
                   else
                     for receipt in model.CurrentReceipts ->
                       receiptDisplay receipt dispatch

@@ -27,7 +27,7 @@
     <RestorePackages>true</RestorePackages>
     <OtherFlags>/warnon:1182</OtherFlags>
     <WarningLevel>4</WarningLevel>
-    <SelectedDevice>A-gold BV9500Pro</SelectedDevice>
+    <SelectedDevice>pixel_2_pie_9_0_-_api_28</SelectedDevice>
     <DefaultDevice>pixel_2_pie_9_0_-_api_28</DefaultDevice>
   </PropertyGroup>
   <PropertyGroup Condition=" '$(Configuration)|$(Platform)' == 'Debug|AnyCPU' ">
@@ -147,6 +147,9 @@
       <HintPath>..\packages\LiteDB.FSharp.2.15.1\lib\netstandard2.0\LiteDB.FSharp.dll</HintPath>
     </Reference>
     <Reference Include="Microsoft.CSharp" />
+    <Reference Include="Microsoft.FSharpLu.Json">
+      <HintPath>..\packages\Microsoft.FSharpLu.Json.0.11.6\lib\netstandard2.0\Microsoft.FSharpLu.Json.dll</HintPath>
+    </Reference>
     <Reference Include="Microsoft.Graph">
       <HintPath>..\packages\Microsoft.Graph.3.8.0\lib\netstandard2.0\Microsoft.Graph.dll</HintPath>
     </Reference>

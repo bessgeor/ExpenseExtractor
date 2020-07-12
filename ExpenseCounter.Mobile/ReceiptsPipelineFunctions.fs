@@ -38,17 +38,6 @@
         handleAggrException exn e qs ParseFailed
     | any -> any
 
-  let private handleFNSResponse taskName receipt onSuccess (responseTask: Threading.Tasks.Task<#Results.Result>) =
-    async {
-      try
-        let! response = Async.AwaitTask responseTask
-        if not response.IsSuccess then
-          return DetailsGettingFailed (receipt, Exception(sprintf "%s: %A (%s)" taskName response.StatusCode response.Message))
-        else
-          return! onSuccess response
-      with | :? Exception as e -> return DetailsGettingFailed (receipt, e)
-    }
-
   let private parseDetailsFromResponse (doc: Results.Receipt) receipt =
     {
       Identifiers = receipt
@@ -67,28 +56,100 @@
         |> Seq.toArray
     }
 
-  let private noopIfNoInternet internetDependingHandler id receipt =
-    async {
-      if (Connectivity.NetworkAccess <> NetworkAccess.Internet) then
-        do! Async.Sleep(1000)
+  let private expandAggregateException (e: exn) =
+    match e with
+    | :? AggregateException as aggr -> seq aggr.InnerExceptions
+    | _ -> Seq.singleton e
+  let private expandAggregateExceptions e1 e2 =
+    seq {
+      yield! expandAggregateException e1
+      yield! expandAggregateException e2
+    }
+    
+  type FederalTaxServiceResult<'T> =
+    | Success of 'T
+    | Failure of Exception
+
+  type FederalTaxService () =
+    member _.Return v = async.Return (Success v)
+
+    member _.Bind (m: Async<FederalTaxServiceResult<'v>>, binder: 'v -> Async<FederalTaxServiceResult<'u>>) =
+      async {
         if (Connectivity.NetworkAccess <> NetworkAccess.Internet) then
-          return id receipt
-        else return! internetDependingHandler receipt
-      else return! internetDependingHandler receipt
+          return Failure (Exception("no stable Internet connection"))
+        else
+          let! m = m
+          match m with
+          | Failure e -> return Failure e
+          | Success v ->
+              try
+                do! Async.Sleep 1000
+                return! binder v
+              with
+              | e -> return Failure e
+      }
+
+  let fts = FederalTaxService()
+
+  let private ftsRequest name (req: Task<#Results.Result>) =
+    async {
+      let! v = req |> Async.AwaitTask
+      if not v.IsSuccess then
+        return Failure (Exception(sprintf "%s: %A (%s)" name v.StatusCode v.Message))
+      else
+        return Success v
+    }
+
+  let private loginAsync (credentials: OfdCredentials.OfdCredentials) =
+    FNS.LoginAsync (credentials.Phone, credentials.Password)
+    |> ftsRequest "login"
+
+  let private existsAsync (receipt) = 
+    FNS.CheckAsync(
+      receipt.FiscalNumber,
+      receipt.FiscalDocumentNumber,
+      receipt.FiscalSignature,
+      receipt.Time,
+      receipt.Sum
+    )
+    |> ftsRequest "exists check"
+    |> fun x -> async {
+        let! v = x
+        match v with
+        | Failure _ -> return v
+        | Success s ->
+          if not s.ReceiptExists then
+            return (Failure (Exception("Federal Tax Service claims that this receipt does not exist")))
+          else return (Success s)
+      }
+
+  let private receiveAsync (credentials: OfdCredentials.OfdCredentials) receipt =
+    FNS.ReceiveAsync(
+      receipt.FiscalNumber,
+      receipt.FiscalDocumentNumber,
+      receipt.FiscalSignature,
+      credentials.Phone,
+      credentials.Password
+    )
+    |> ftsRequest "details getting"
+
+  let private req (credentials: OfdCredentials.OfdCredentials) receipt =
+    fts {
+      let! _ = loginAsync credentials
+      let! _ = existsAsync receipt
+      let! _ = existsAsync receipt
+      let! details = receiveAsync credentials receipt
+      return parseDetailsFromResponse details.Document.Receipt receipt
     }
 
   let private requestFTSDetails (credentials: OfdCredentials.OfdCredentials) receipt =
-    FNS.LoginAsync (credentials.Phone, credentials.Password)
-    |> handleFNSResponse "login" receipt (fun _ ->
-      FNS.CheckAsync (receipt.FiscalNumber, receipt.FiscalDocumentNumber, receipt.FiscalSignature, receipt.Time, receipt.Sum)
-      |> handleFNSResponse "check receipt" receipt (fun response ->
-        if not response.ReceiptExists then
-          async.Return (DetailsGettingFailed (receipt, Exception("Federal Tax Service claims that this receipt does not exist")))
-        else
-          FNS.ReceiveAsync (receipt.FiscalNumber, receipt.FiscalDocumentNumber, receipt.FiscalSignature, credentials.Phone, credentials.Password)
-          |> handleFNSResponse "receive receipt details" receipt (fun resp -> parseDetailsFromResponse resp.Document.Receipt receipt |> Detailed |> async.Return)
-      )
-    )
+    async {
+      let! res = req credentials receipt
+      return 
+        match res with
+        | Success v -> Detailed v
+        | Failure e -> DetailsGettingFailed (receipt, e)
+    }
 
   let private getDetails (receipt: ParsedReceipt) =
     async {
@@ -97,8 +158,7 @@
         return DetailsGettingFailed (receipt, Exception("No credentials stored"))
       else
         let credentials = ValueOption.get credentialsOption
-        let internetDependingHandler = requestFTSDetails credentials
-        return! noopIfNoInternet internetDependingHandler Parsed receipt
+        return! requestFTSDetails credentials receipt
     }
 
   let tryDetail receipt =
@@ -184,8 +244,9 @@
       if (ValueOption.isNone link) then
         raise (Exception("no excel file link specified"))
       let encodedLink = ValueOption.get link
-      let internetDependngHandler = uploadInternetDepending encodedLink
-      return! noopIfNoInternet internetDependngHandler (fun _ -> Array.empty) receipts
+      if Connectivity.NetworkAccess <> NetworkAccess.Internet then
+        raise (Exception "no stable Internet connection")
+      return! uploadInternetDepending encodedLink receipts
     }
 
   let tryUpload receipts =

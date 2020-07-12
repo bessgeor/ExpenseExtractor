@@ -23,7 +23,7 @@
     | Retry of ReceiptDTO
     
   let updateReceipts () =
-    Receipts.getLatestReceipts 10
+    Receipts.getLatestReceipts 20
     |> ReceiptsUpdated
   
   let private loadCredentialsFromStorage =

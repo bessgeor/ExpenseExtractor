@@ -48,7 +48,7 @@
       | ParsingError -> do handleParsable (seq { currentState })
       | DetailsFail -> do! handleDetailable (seq { currentState })
       | UploadFail -> do! handleUploadable (seq { currentState })
-      | _ -> do ignore()
+      | _ -> do Receipts.onDbUpdate.Trigger (ValueSome currentState)
     }
 
   let run () =
