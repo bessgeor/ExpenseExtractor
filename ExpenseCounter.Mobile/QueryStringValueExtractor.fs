@@ -13,6 +13,7 @@
   let dateTimeFormats =
     [|
       "yyyyMMddTHHmm"
+      "yyyyMMddTHHmmss"
     |]
 
   let dateTimeReviver (qs: string) start length =
