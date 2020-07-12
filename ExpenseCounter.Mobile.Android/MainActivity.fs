@@ -16,41 +16,42 @@ open Microsoft.Identity.Client
 
 [<Activity (Label = "ExpenseCounter.Mobile.Android", Icon = "@drawable/icon", Theme = "@style/MainTheme", MainLauncher = true, ConfigurationChanges = (ConfigChanges.ScreenSize ||| ConfigChanges.Orientation))>]
 type MainActivity() =
-    inherit FormsAppCompatActivity()
+  inherit FormsAppCompatActivity()
     
-    member val _bgCancellation: CancellationTokenSource ValueOption = ValueNone with get, set
+  member val _bgCancellation: CancellationTokenSource ValueOption = ValueNone with get, set
 
-    override this.OnCreate (bundle: Bundle) =
-        FormsAppCompatActivity.TabLayoutResource <- Resources.Layout.Tabbar
-        FormsAppCompatActivity.ToolbarResource <- Resources.Layout.Toolbar
-        base.OnCreate (bundle)
+  override this.OnCreate (bundle: Bundle) =
 
-        Xamarin.Essentials.Platform.Init(this, bundle)
-        ZXing.Net.Mobile.Forms.Android.Platform.Init()
+    FormsAppCompatActivity.TabLayoutResource <- Resources.Layout.Tabbar
+    FormsAppCompatActivity.ToolbarResource <- Resources.Layout.Toolbar
+    base.OnCreate (bundle)
 
-        Xamarin.Forms.Forms.Init (this, bundle)
+    Xamarin.Essentials.Platform.Init(this, bundle)
+    ZXing.Net.Mobile.Forms.Android.Platform.Init()
+
+    Xamarin.Forms.Forms.Init (this, bundle)
         
-        if (ValueOption.isNone this._bgCancellation) then this._bgCancellation <- new CancellationTokenSource() |> ValueSome
+    if (ValueOption.isNone this._bgCancellation) then this._bgCancellation <- new CancellationTokenSource() |> ValueSome
 
-        let background = Thread(ParameterizedThreadStart(fun bg -> (bg :?> (CancellationToken -> unit))((ValueOption.get this._bgCancellation).Token)))
+    let background = Thread(ParameterizedThreadStart(fun bg -> (bg :?> (CancellationToken -> unit))((ValueOption.get this._bgCancellation).Token)))
         
-        let appcore = new ExpenseCounter.Mobile.App((fun bg -> background.Start (box bg)), box this)
-        this.LoadApplication (appcore)
+    let appcore = new ExpenseCounter.Mobile.App((fun bg -> background.Start (box bg)), box this)
+    this.LoadApplication (appcore)
 
-    override _.OnActivityResult (requestCode, resultCode, data) =
-      base.OnActivityResult(requestCode, resultCode, data)
-      AuthenticationContinuationHelper.SetAuthenticationContinuationEventArgs(requestCode, resultCode, data)
+  override _.OnActivityResult (requestCode, resultCode, data) =
+    base.OnActivityResult(requestCode, resultCode, data)
+    AuthenticationContinuationHelper.SetAuthenticationContinuationEventArgs(requestCode, resultCode, data)
 
-    override this.OnDestroy () =
-      this._bgCancellation
-      |> ValueOption.map (fun c ->
-        c.Cancel()
-        c.Dispose()
-        this._bgCancellation <- ValueNone
-      )
-      |> ValueOption.defaultValue (ignore())
+  override this.OnDestroy () =
+    this._bgCancellation
+    |> ValueOption.map (fun c ->
+      c.Cancel()
+      c.Dispose()
+      this._bgCancellation <- ValueNone
+    )
+    |> ValueOption.defaultValue (ignore())
 
-    override _.OnRequestPermissionsResult(requestCode: int, permissions: string[], [<GeneratedEnum>] grantResults: Android.Content.PM.Permission[]) =
-        Xamarin.Essentials.Platform.OnRequestPermissionsResult(requestCode, permissions, grantResults)
-        ZXing.Net.Mobile.Android.PermissionsHandler.OnRequestPermissionsResult (requestCode, permissions, grantResults)
-        base.OnRequestPermissionsResult(requestCode, permissions, grantResults)
+  override _.OnRequestPermissionsResult(requestCode: int, permissions: string[], [<GeneratedEnum>] grantResults: Android.Content.PM.Permission[]) =
+    Xamarin.Essentials.Platform.OnRequestPermissionsResult(requestCode, permissions, grantResults)
+    ZXing.Net.Mobile.Android.PermissionsHandler.OnRequestPermissionsResult (requestCode, permissions, grantResults)
+    base.OnRequestPermissionsResult(requestCode, permissions, grantResults)
