@@ -22,13 +22,18 @@
     | ValueSome err -> raise (Exception (err.ToString()))
     | ValueNone -> ignore()
 
+  let mutable private latestAuthRequest = DateTime.Today.ToUniversalTime()
+
   type AsyncBuilder with
-    member inline private this.authAndRetry computation binder =
-      do Async.Start (async { MSALAuthEvents.onAuthRequired.Trigger() })
-      this.Bind(
-        this.Delay(fun () -> Async.AwaitEvent MSALAuthEvents.onAuthSuccess.Publish),
-        fun () -> this.Bind (computation, binder)
-      )
+    member private this.authAndRetry computation binder =
+      if DateTime.UtcNow - latestAuthRequest > TimeSpan.FromMinutes 1. then
+        do latestAuthRequest <- DateTime.UtcNow
+        do Async.Start (async { MSALAuthEvents.onAuthRequired.Trigger() })
+        this.Bind(
+          this.Delay(fun () -> Async.AwaitEvent MSALAuthEvents.onAuthSuccess.Publish),
+          fun () -> this.Bind (computation, binder)
+        )
+      else this.Bind (computation, binder)
 
     [<CustomOperation("authenticated", AllowIntoPattern = true, MaintainsVariableSpaceUsingBind = true)>]
     member this.Authenticated<'T, 'U when 'U :> Entity> (computation: Async<'T>, [<ProjectionParameter>]binder:('T -> Async<'U>)) =

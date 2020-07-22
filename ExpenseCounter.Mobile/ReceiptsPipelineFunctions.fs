@@ -18,10 +18,33 @@
       FiscalSignature = extractQueryStringComponent "fp" stringReviver qs
     }
 
-  let private handleAggrException (exn: Exception) (e: Exception) (v: 'value) (f: 'value*Exception -> 'result) =
-    match exn with
-    | :? AggregateException as aggr -> f (v, AggregateException([| yield! aggr.InnerExceptions; yield e |]))
-    | old -> f (v, AggregateException(old, e))
+  let private mergeErrors a b =
+    match (a,b) with
+    | Simple e1, Simple e2 -> Combined [ e1; e2 ]
+    | Combined cmb, Simple s -> Combined [ yield! cmb; s ]
+    | Simple s, Combined cmb -> Combined [ s; yield! cmb ]
+    | Combined e1, Combined e2 -> Combined [ yield! e1; yield! e2 ]
+
+  let rec private exnToErrorValue (e: exn) =
+    {
+      Message = e.Message;
+      StackTrace = e.StackTrace;
+      Inner = ValueOption.ofObj e.InnerException |> ValueOption.map exnToErrorValue
+    }
+
+  let private exnToError (e: exn) =
+    match e with
+    | :? AggregateException as aggr -> aggr.InnerExceptions |> Seq.map exnToErrorValue |> Seq.toList |> Combined
+    | e -> e |> exnToErrorValue |> Simple
+
+  let private stringToError s =
+    Simple { Message = s; StackTrace = ""; Inner = ValueNone }
+
+  let private handleAggrException (exn: ReceiptError) (e: exn) (v: 'value) (f: 'value*ReceiptError -> 'result) =
+    e
+    |> exnToError
+    |> mergeErrors exn
+    |> fun e -> f (v, e)
 
   let tryParse receipt =
     match receipt with
@@ -29,12 +52,12 @@
       try
         let parsed = parse qs
         Parsed parsed
-      with | :? Exception as e -> ParseFailed (qs, e)
+      with | e -> ParseFailed (qs, exnToError e)
     | ParseFailed (qs, exn) ->
       try
         let parsed = parse qs
         Parsed parsed
-      with | :? Exception as e ->
+      with | e ->
         handleAggrException exn e qs ParseFailed
     | any -> any
 
@@ -68,7 +91,7 @@
     
   type FederalTaxServiceResult<'T> =
     | Success of 'T
-    | Failure of Exception
+    | Failure of ReceiptError
 
   type FederalTaxService () =
     member _.Return v = async.Return (Success v)
@@ -76,17 +99,22 @@
     member _.Bind (m: Async<FederalTaxServiceResult<'v>>, binder: 'v -> Async<FederalTaxServiceResult<'u>>) =
       async {
         if (Connectivity.NetworkAccess <> NetworkAccess.Internet) then
-          return Failure (Exception("no stable Internet connection"))
+          return Failure (stringToError "no stable Internet connection")
         else
           let! m = m
           match m with
           | Failure e -> return Failure e
           | Success v ->
               try
-                do! Async.Sleep 1000
                 return! binder v
               with
-              | e -> return Failure e
+              | e -> return Failure (exnToError e)
+      }
+
+    static member Sleep time =
+      async {
+        do! Async.Sleep time
+        return Success ()
       }
 
   let fts = FederalTaxService()
@@ -95,7 +123,7 @@
     async {
       let! v = req |> Async.AwaitTask
       if not v.IsSuccess then
-        return Failure (Exception(sprintf "%s: %A (%s)" name v.StatusCode v.Message))
+        return Failure (stringToError <| sprintf "%s: %A (%s)" name v.StatusCode v.Message)
       else
         return Success v
     }
@@ -119,8 +147,8 @@
         | Failure _ -> return v
         | Success s ->
           if not s.ReceiptExists then
-            return (Failure (Exception("Federal Tax Service claims that this receipt does not exist")))
-          else return (Success s)
+            return (Failure (stringToError "Federal Tax Service claims that this receipt does not exist"))
+          else return Success s
       }
 
   let private receiveAsync (credentials: OfdCredentials.OfdCredentials) receipt =
@@ -137,6 +165,7 @@
     fts {
       let! _ = loginAsync credentials
       let! _ = existsAsync receipt
+      do! FederalTaxService.Sleep 1000
       let! _ = existsAsync receipt
       let! details = receiveAsync credentials receipt
       return parseDetailsFromResponse details.Document.Receipt receipt
@@ -155,7 +184,7 @@
     async {
       let! credentialsOption = OfdCredentials.get()
       if ValueOption.isNone credentialsOption then
-        return DetailsGettingFailed (receipt, Exception("No credentials stored"))
+        return DetailsGettingFailed (receipt, stringToError "No credentials stored")
       else
         let credentials = ValueOption.get credentialsOption
         return! requestFTSDetails credentials receipt
@@ -169,7 +198,7 @@
       | DetailsGettingFailed (r, exn) ->
         let! detailed = getDetails r
         match detailed with
-        | DetailsGettingFailed (r, e) -> return handleAggrException exn e r DetailsGettingFailed
+        | DetailsGettingFailed (r, e) -> return DetailsGettingFailed (r, mergeErrors exn e)
         | any -> return any
       | any -> return any
     }
@@ -266,8 +295,8 @@
         let! uploaded = upload onlyUploadable
         return uploaded
       with
-      | :? Exception as e ->
+      | e ->
         return
           onlyUploadable
-          |> Array.map (fun (dto, detailed) -> { dto with Receipt = UploadFailed (detailed, e) })
+          |> Array.map (fun (dto, detailed) -> { dto with Receipt = UploadFailed (detailed, exnToError e) })
     }

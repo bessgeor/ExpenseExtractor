@@ -8,9 +8,8 @@
   open System
   open System.Globalization
 
-  let rec private exnDisplay padding header (e: exn) =
-    View.StackLayout(padding = Thickness(padding, 0., 0., 0.), children = [
-      View.Label(text = header)
+  let private exnViewElements e =
+    [
       View.Editor(
         text = e.Message,
         isReadOnly = true,
@@ -26,12 +25,19 @@
             fontSize = Named NamedSize.Micro
           )
       )
+    ]
+
+  let rec private exnDisplay padding header e =
+    View.StackLayout(padding = Thickness(padding, 0., 0., 0.), children = [
+      View.Label(text = header)
       match e with
-      | :? AggregateException as aggr ->
-        for inner in aggr.InnerExceptions do
-          exnDisplay 10. "Inner exception" inner
-      | e when e.InnerException <> null -> exnDisplay 10. "Inner exception" e.InnerException
-      | _ -> View.Label(height = 0., width = 0.)
+      | Combined aggr ->
+        for inner in aggr do
+          exnDisplay 10. "Inner exception" (Simple inner)
+      | Simple e when e.Inner.IsSome ->
+        yield! exnViewElements e
+        exnDisplay 10. "Inner exception" (ValueOption.get e.Inner |> Simple)
+      | Simple e -> yield! exnViewElements e
     ])
 
   let private scannedDataDisplay str =

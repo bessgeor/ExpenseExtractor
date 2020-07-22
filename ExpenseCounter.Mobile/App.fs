@@ -70,7 +70,6 @@ type App (backgroundRunner: (CancellationToken -> unit) -> unit, activityOrWindo
 
     // Uncomment this code to save the application state to app.Properties using Newtonsoft.Json
     // See https://fsprojects.github.io/Fabulous/Fabulous.XamarinForms/models.html#saving-application-state for further  instructions.
-
     let modelId = "model"
     override __.OnSleep() = 
 

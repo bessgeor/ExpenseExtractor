@@ -36,8 +36,8 @@
               |> Async.AwaitTask
           return ValueSome asquiredAuth.AccessToken
         with
-        | :? Exception as e -> return ValueNone
-      | :? Exception as e -> return ValueNone
+        | _ -> return ValueNone
+      | _ -> return ValueNone
     }
 
   let private secureStorageKey = "msal-access-token"
@@ -45,7 +45,7 @@
     async {
       match tokenOption with
       | ValueSome token -> do! SecureStorage.SetAsync(secureStorageKey, token) |> Async.AwaitTask
-      | ValueNone -> ignore()
+      | ValueNone -> ()
     }
   let get () =
     async {
@@ -59,5 +59,5 @@
       do! set token
       match token with
       | ValueSome _ -> do MSALAuthEvents.onAuthSuccess.Trigger()
-      | ValueNone -> ignore()
+      | ValueNone -> ()
     }

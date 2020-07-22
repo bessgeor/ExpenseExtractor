@@ -32,14 +32,23 @@ open LiteDB.FSharp.Extensions
       Positions: Position array
     }
 
+  type ReceiptErrorValue = {
+    Message: string;
+    StackTrace: string;
+    Inner: ReceiptErrorValue voption
+  }
+  type ReceiptError =
+    | Simple of ReceiptErrorValue
+    | Combined of ReceiptErrorValue list
+
   type Receipt =
     | RawScanned of string //t=20200701T1313&s=552.00&fn=9252440300187682&i=11854&fp=4003497372&n=1
-    | ParseFailed of string * Exception
+    | ParseFailed of string * ReceiptError
     | Parsed of ParsedReceipt
     | Detailed of ReceiptDetails
-    | DetailsGettingFailed of ParsedReceipt * Exception
+    | DetailsGettingFailed of ParsedReceipt * ReceiptError
     | Uploaded of ReceiptDetails
-    | UploadFailed of ReceiptDetails * Exception
+    | UploadFailed of ReceiptDetails * ReceiptError
 
   type PipelineStep =
     | Scan
@@ -56,7 +65,7 @@ open LiteDB.FSharp.Extensions
       Id: int
       LastAction: DateTime
       Stage: PipelineStep
-      Error: Exception option
+      Error: ReceiptError option
       Receipt: Receipt
     }
 
